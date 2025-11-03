@@ -1,0 +1,61 @@
+NOTER - SIMPLE NOTE-TAKING WITH VOICE RECORDING
+============================================
+
+Transform the way you capture ideas with Noter - the ultimate note-taking companion that combines simplicity with powerful features.
+
+Noter is designed for everyone who loves to stay organized - students, professionals, creators, and busy individuals. Whether you're jotting down quick thoughts, planning your day, or capturing important information, Noter makes it effortless.
+
+✨ KEY FEATURES
+
+📝 Rich Text Notes
+• Create unlimited notes with titles and detailed content
+• Quick and responsive text input
+• Support for multi-line notes
+
+🎙️ Voice Recording
+• Record audio directly within the app
+• Perfect for lectures, meetings, interviews, or voice memos
+• Built-in playback controls with duration tracking
+• Save recordings with custom titles and colors
+
+🎨 Beautiful Customization
+• Choose from 8 vibrant color themes for each note
+• Modern, clean interface with smooth animations
+• Grid or list view options
+
+📌 Smart Organization
+• Pin important notes to the top
+• Instant search to find any note quickly
+• Swipe gestures for quick actions
+• Sort by date automatically
+
+🌙 Dark Mode Support
+• Automatic dark theme for comfortable night-time use
+• Beautiful gradient headers
+
+🔒 Privacy First
+• All data stored locally on your device
+• No account required - start using immediately
+• Your notes never leave your phone
+• No internet connection needed
+
+⚡ Performance
+• Lightning-fast and lightweight
+• Minimal battery consumption
+• Smooth animations
+
+📊 Export & Backup
+• Export all your notes as JSON
+• Never lose your important notes
+
+Perfect for students, professionals, journalists, researchers, content creators, and anyone who wants a reliable note-taking app.
+
+Unlike other note-taking apps that require accounts or subscriptions, Noter keeps things simple and private. Your data stays on your device. No ads, no tracking, no complications.
+
+PERMISSIONS EXPLAINED
+• RECORD_AUDIO: Required only for the voice recording feature. You can use text notes without granting this permission.
+
+Download Noter today and experience the perfect blend of simplicity and functionality.
+
+Start capturing your thoughts, ideas, and moments with Noter - Simple. Powerful. Private. 🚀
+
