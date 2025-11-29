@@ -18,6 +18,7 @@ class Note {
   final DateTime createdAt;
   final DateTime updatedAt;
   final Color color;
+  final String category;
   final bool isPinned;
 
   Note({
@@ -27,24 +28,29 @@ class Note {
     required this.createdAt,
     required this.updatedAt,
     required this.color,
+    this.category = 'General',
     this.isPinned = false,
   });
 
   Map<String, dynamic> toJson() => {
         'id': id,
-      'title': title,
-      'content': content,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
-      'color': color.toARGB32(),
-      'isPinned': isPinned,
-    };  factory Note.fromJson(Map<String, dynamic> json) => Note(
+        'title': title,
+        'content': content,
+        'createdAt': createdAt.toIso8601String(),
+        'updatedAt': updatedAt.toIso8601String(),
+        'color': color.toARGB32(),
+        'category': category,
+        'isPinned': isPinned,
+      };
+
+  factory Note.fromJson(Map<String, dynamic> json) => Note(
         id: json['id'] as String,
         title: json['title'] as String,
         content: json['content'] as String,
         createdAt: DateTime.parse(json['createdAt'] as String),
         updatedAt: DateTime.parse(json['updatedAt'] as String),
         color: Color(json['color'] as int),
+        category: json['category'] as String? ?? 'General',
         isPinned: json['isPinned'] as bool? ?? false,
       );
 
@@ -55,6 +61,7 @@ class Note {
     DateTime? createdAt,
     DateTime? updatedAt,
     Color? color,
+    String? category,
     bool? isPinned,
   }) {
     return Note(
@@ -64,6 +71,7 @@ class Note {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       color: color ?? this.color,
+      category: category ?? this.category,
       isPinned: isPinned ?? this.isPinned,
     );
   }
@@ -215,12 +223,54 @@ class _HomePageState extends State<HomePage> {
   List<VoiceNote> _voiceNotes = [];
   bool _isGridView = false;
   String _searchQuery = '';
+  String _selectedCategory = 'All';
+  final Set<String> _customCategories = {};
+
+  static const List<String> _defaultCategories = [
+    'General',
+    'Work',
+    'Personal',
+    'Ideas',
+    'Tasks',
+    'Reminders',
+  ];
+
+  List<String> get _noteCategories {
+    final categories = {
+      ..._defaultCategories,
+      ..._customCategories,
+      ..._textNotes.map((note) => note.category),
+    }..removeWhere((category) => category.trim().isEmpty);
+    final sorted = categories.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return sorted;
+  }
 
   @override
   void initState() {
     super.initState();
+    _loadCustomCategories();
     _loadNotes();
     _loadViewPreference();
+  }
+
+  Future<void> _loadCustomCategories() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getStringList('customCategories');
+    if (stored == null) {
+      return;
+    }
+    final cleaned = stored
+        .map((entry) => entry.trim())
+        .where((entry) => entry.isNotEmpty)
+        .toSet();
+    if (cleaned.isEmpty) {
+      return;
+    }
+    setState(() {
+      _customCategories
+        ..clear()
+        ..addAll(cleaned);
+    });
   }
 
   Future<void> _loadViewPreference() async {
@@ -272,6 +322,13 @@ class _HomePageState extends State<HomePage> {
     await prefs.setString('voiceNotes', voiceNotesJson);
   }
 
+  Future<void> _saveCustomCategories() async {
+    final prefs = await SharedPreferences.getInstance();
+    final sorted = _customCategories.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    await prefs.setStringList('customCategories', sorted);
+  }
+
   void _addTextNote(Note note) {
     setState(() {
       _textNotes.insert(0, note);
@@ -316,6 +373,10 @@ class _HomePageState extends State<HomePage> {
           note.content.toLowerCase().contains(searchLower);
     }).toList();
 
+    if (_selectedCategory != 'All') {
+      notes = notes.where((note) => note.category == _selectedCategory).toList();
+    }
+
     // Sort: pinned first, then by date
     notes.sort((a, b) {
       if (a.isPinned && !b.isPinned) return -1;
@@ -324,6 +385,29 @@ class _HomePageState extends State<HomePage> {
     });
 
     return notes;
+  }
+
+  void _handleCategorySelected(String category) {
+    setState(() {
+      _selectedCategory = category;
+    });
+  }
+
+  void _addCustomCategory(String category) {
+    final trimmed = category.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    final lower = trimmed.toLowerCase();
+    final existsInDefaults = _defaultCategories.any((c) => c.toLowerCase() == lower);
+    final existsInCustoms = _customCategories.any((c) => c.toLowerCase() == lower);
+    if (existsInDefaults || existsInCustoms) {
+      return;
+    }
+    setState(() {
+      _customCategories.add(trimmed);
+    });
+    _saveCustomCategories();
   }
 
   Future<void> _exportNotes() async {
@@ -419,6 +503,10 @@ class _HomePageState extends State<HomePage> {
             searchQuery: _searchQuery,
             onSearchChanged: (query) => setState(() => _searchQuery = query),
             onExport: _exportNotes,
+            categories: _noteCategories,
+            selectedCategory: _selectedCategory,
+            onCategorySelected: _handleCategorySelected,
+            onCreateCategory: _addCustomCategory,
           ),
           VoiceNotesPage(
             voiceNotes: _voiceNotes,
@@ -486,6 +574,8 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (context) => AddEditNoteDialog(
         onSave: _addTextNote,
+        categories: _noteCategories,
+        onCreateCategory: _addCustomCategory,
       ),
     );
   }
@@ -495,6 +585,10 @@ class _HomePageState extends State<HomePage> {
 class NotesListPage extends StatelessWidget {
   final List<Note> textNotes;
   final List<VoiceNote> voiceNotes;
+  final List<String> categories;
+  final String selectedCategory;
+  final Function(String) onCategorySelected;
+  final Function(String) onCreateCategory;
   final Function(Note) onAddTextNote;
   final Function(String, Note) onUpdateTextNote;
   final Function(String) onDeleteTextNote;
@@ -513,6 +607,10 @@ class NotesListPage extends StatelessWidget {
     super.key,
     required this.textNotes,
     required this.voiceNotes,
+    required this.categories,
+    required this.selectedCategory,
+    required this.onCategorySelected,
+  required this.onCreateCategory,
     required this.onAddTextNote,
     required this.onUpdateTextNote,
     required this.onDeleteTextNote,
@@ -532,6 +630,7 @@ class NotesListPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = themeMode == ThemeMode.dark;
     final totalNotes = textNotes.length + voiceNotes.length;
+    final displayCategories = ['All', ...categories];
 
     return CustomScrollView(
       slivers: [
@@ -669,6 +768,41 @@ class NotesListPage extends StatelessWidget {
                     ),
                   ),
                 ),
+                SizedBox(
+                  height: 38,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: displayCategories.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      final category = displayCategories[index];
+                      final isSelected = category == selectedCategory;
+                      return ChoiceChip(
+                        label: Text(category),
+                        selected: isSelected,
+                        onSelected: (_) => onCategorySelected(category),
+                        selectedColor: const Color(0xFF6C5CE7),
+                        labelStyle: TextStyle(
+                          color: isSelected
+                              ? Colors.white
+                              : (isDark ? Colors.white : const Color(0xFF2D3436)),
+                          fontWeight: FontWeight.w600,
+                        ),
+                        backgroundColor:
+                            isDark ? const Color(0xFF1A1A2E) : Colors.white,
+                        shape: StadiumBorder(
+                          side: BorderSide(
+                            color: isSelected
+                                ? const Color(0xFF6C5CE7)
+                                : Colors.grey.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 20),
                 if (textNotes.isEmpty && voiceNotes.isEmpty)
                   Container(
                     margin: const EdgeInsets.symmetric(vertical: 40),
@@ -848,6 +982,8 @@ class NotesListPage extends StatelessWidget {
       builder: (context) => AddEditNoteDialog(
         note: note,
         onSave: (updatedNote) => onUpdateTextNote(note.id, updatedNote),
+        categories: categories,
+        onCreateCategory: onCreateCategory,
       ),
     );
   }
@@ -968,6 +1104,22 @@ class NoteCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: note.color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                note.category,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: note.color,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             Text(
               note.content,
               style: TextStyle(
@@ -1041,11 +1193,15 @@ class NoteCard extends StatelessWidget {
 class AddEditNoteDialog extends StatefulWidget {
   final Note? note;
   final Function(Note) onSave;
+  final List<String> categories;
+  final Function(String) onCreateCategory;
 
   const AddEditNoteDialog({
     super.key,
     this.note,
     required this.onSave,
+    required this.categories,
+    required this.onCreateCategory,
   });
 
   @override
@@ -1055,7 +1211,12 @@ class AddEditNoteDialog extends StatefulWidget {
 class _AddEditNoteDialogState extends State<AddEditNoteDialog> {
   late TextEditingController _titleController;
   late TextEditingController _contentController;
+  late TextEditingController _newCategoryController;
   late Color _selectedColor;
+  late String _selectedCategory;
+  late List<String> _categories;
+  String? _categoryError;
+  int _contentCharCount = 0;
 
   final List<Color> _colors = [
     const Color(0xFF6C5CE7),
@@ -1073,14 +1234,59 @@ class _AddEditNoteDialogState extends State<AddEditNoteDialog> {
     super.initState();
     _titleController = TextEditingController(text: widget.note?.title ?? '');
     _contentController = TextEditingController(text: widget.note?.content ?? '');
+    _newCategoryController = TextEditingController();
     _selectedColor = widget.note?.color ?? _colors[0];
+    final baseCategories = widget.categories.isNotEmpty ? widget.categories : ['General'];
+    final normalized = baseCategories
+        .map((entry) => entry.trim())
+        .where((entry) => entry.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    if (widget.note?.category != null &&
+        widget.note!.category.trim().isNotEmpty &&
+        !normalized.any((c) => c.toLowerCase() == widget.note!.category.trim().toLowerCase())) {
+      normalized.add(widget.note!.category.trim());
+      normalized.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    }
+    _categories = normalized.isEmpty ? ['General'] : normalized;
+    final existingCategory = widget.note?.category ?? _categories.first;
+    final match = _categories.firstWhere(
+      (c) => c.toLowerCase() == existingCategory.toLowerCase(),
+      orElse: () => _categories.first,
+    );
+    _selectedCategory = match;
+  _contentCharCount = _contentController.text.length;
+
+    _contentController.addListener(_handleContentChanged);
+    _newCategoryController.addListener(_clearCategoryErrorOnInput);
   }
 
   @override
   void dispose() {
+    _contentController.removeListener(_handleContentChanged);
+    _newCategoryController.removeListener(_clearCategoryErrorOnInput);
     _titleController.dispose();
     _contentController.dispose();
+    _newCategoryController.dispose();
     super.dispose();
+  }
+
+  void _handleContentChanged() {
+  final length = _contentController.text.length;
+    if (length != _contentCharCount) {
+      setState(() {
+        _contentCharCount = length;
+      });
+    }
+  }
+
+  void _clearCategoryErrorOnInput() {
+    if (_categoryError != null && _newCategoryController.text.isNotEmpty) {
+      setState(() {
+        _categoryError = null;
+      });
+    }
   }
 
   void _handleSave() {
@@ -1099,10 +1305,37 @@ class _AddEditNoteDialogState extends State<AddEditNoteDialog> {
       createdAt: widget.note?.createdAt ?? now,
       updatedAt: now,
       color: _selectedColor,
+      category: _selectedCategory,
     );
 
     widget.onSave(note);
     Navigator.pop(context);
+  }
+
+  void _handleAddCategory() {
+    final raw = _newCategoryController.text.trim();
+    if (raw.isEmpty) {
+      setState(() {
+        _categoryError = 'Enter a category name';
+      });
+      return;
+    }
+    final lower = raw.toLowerCase();
+    final exists = _categories.any((c) => c.toLowerCase() == lower);
+    if (exists) {
+      setState(() {
+        _categoryError = 'Category already exists';
+      });
+      return;
+    }
+    widget.onCreateCategory(raw);
+    setState(() {
+      _categories.add(raw);
+      _categories.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      _selectedCategory = raw;
+      _newCategoryController.clear();
+      _categoryError = null;
+    });
   }
 
   @override
@@ -1174,7 +1407,98 @@ class _AddEditNoteDialogState extends State<AddEditNoteDialog> {
                         ? Colors.grey[900]!.withValues(alpha: 0.3)
                         : Colors.grey[100],
                   ),
-                  maxLines: 6,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.newline,
+                  minLines: 10,
+                  maxLines: null,
+                  style: const TextStyle(fontSize: 16, height: 1.5),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '${_contentCharCount.toString()} characters',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Category',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: _categories.map((category) {
+                    final isSelected = category == _selectedCategory;
+                    return ChoiceChip(
+                      label: Text(category),
+                      selected: isSelected,
+                      onSelected: (_) {
+                        setState(() => _selectedCategory = category);
+                      },
+                      selectedColor: const Color(0xFF6C5CE7),
+                      labelStyle: TextStyle(
+                        color: isSelected
+                            ? Colors.white
+                            : (isDark ? Colors.white : const Color(0xFF2D3436)),
+                        fontWeight: FontWeight.w600,
+                      ),
+                      backgroundColor:
+                          isDark ? const Color(0xFF1A1A2E) : Colors.white,
+                      shape: StadiumBorder(
+                        side: BorderSide(
+                          color: isSelected
+                              ? const Color(0xFF6C5CE7)
+                              : Colors.grey.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _newCategoryController,
+                        decoration: InputDecoration(
+                          labelText: 'Create new category',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          errorText: _categoryError,
+                        ),
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _handleAddCategory(),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: _handleAddCategory,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Add'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6C5CE7),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 24),
                 const Text(
